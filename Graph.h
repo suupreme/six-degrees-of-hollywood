@@ -8,27 +8,27 @@ using ActorIndex = std::size_t;
 using MovieIndex = std::size_t;
 // Init'ing each object and their necessary id's
 class Actor {
-private:
+public:
     std::string id;
     std::string name;
     std::optional<int> birthYear;
 };
 
 class Movie {
-private:
+public:
     std::string id;
     std::string title;
     std::optional<int> year;
 };
 
 class Credit {
-private:
+public:
     ActorIndex actor;
     MovieIndex movie;
 };
 
 class Dataset {
-private:
+public:
     std::vector<Actor> actors;
         std::vector<Movie> movies;
     
