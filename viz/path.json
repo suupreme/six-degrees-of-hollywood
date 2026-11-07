@@ -1,0 +1,23 @@
+{
+  "source": "nm9000000",
+  "target": "nm9000006",
+  "algorithm": "bfs",
+  "degrees": 3,
+  "nodes": [
+    { "id": "nm9000000", "label": "Ava Brooks", "type": "actor" },
+    { "id": "tt9100005", "label": "Second Chorus (2020)", "type": "movie" },
+    { "id": "nm9000007", "label": "Gus Hill", "type": "actor" },
+    { "id": "tt9100003", "label": "Paper Lanterns (2012)", "type": "movie" },
+    { "id": "nm9000005", "label": "Eli Foster", "type": "actor" },
+    { "id": "tt9100004", "label": "Northbound (2016)", "type": "movie" },
+    { "id": "nm9000006", "label": "Fay Garner", "type": "actor" }
+  ],
+  "edges": [
+    { "from": "nm9000000", "to": "tt9100005" },
+    { "from": "tt9100005", "to": "nm9000007" },
+    { "from": "nm9000007", "to": "tt9100003" },
+    { "from": "tt9100003", "to": "nm9000005" },
+    { "from": "nm9000005", "to": "tt9100004" },
+    { "from": "tt9100004", "to": "nm9000006" }
+  ]
+}

@@ -1,0 +1,28 @@
+# Build outputs
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.pdb
+
+# Data: raw IMDb dumps and generated datasets stay local.
+# Only the hand-written sample is tracked.
+*.tsv.gz
+data/*
+!data/sample/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

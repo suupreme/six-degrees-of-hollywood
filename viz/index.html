@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Six Degrees Path</title>
+  <!-- TODO(Josh): build out the visualization. This only draws path.json. -->
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 16px; background: #fff; color: #222; }
+    #summary { margin-bottom: 8px; }
+    #network { height: 80vh; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <div id="summary">Loading path.json...</div>
+  <div id="network"></div>
+  <script>
+    // fetch() does not work from file://, so serve this folder first, e.g.
+    //   python -m http.server --directory viz 8000
+    // and open http://localhost:8000
+    fetch("path.json")
+      .then((response) => response.json())
+      .then((path) => {
+        document.getElementById("summary").textContent =
+          `${path.algorithm}: ${path.degrees} degree(s) of separation`;
+
+        // Actors are blue ellipses, movies are orange boxes.
+        const nodes = path.nodes.map((n) => ({
+          id: n.id,
+          label: n.label,
+          shape: n.type === "movie" ? "box" : "ellipse",
+          color: n.type === "movie" ? "#f4b860" : "#8ab6f9",
+        }));
+
+        new vis.Network(
+          document.getElementById("network"),
+          { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(path.edges) },
+          { layout: { hierarchical: { direction: "LR", sortMethod: "directed" } }, physics: false }
+        );
+      })
+      .catch((err) => {
+        document.getElementById("summary").textContent = "Could not load path.json: " + err;
+      });
+  </script>
+</body>
+</html>
