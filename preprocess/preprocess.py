@@ -1,59 +1,182 @@
-"""Turn the raw IMDb dumps into the three TSV files the C++ program loads.
-
-Inputs (download from https://datasets.imdbws.com/ into --raw-dir):
-    name.basics.tsv.gz       nconst, primaryName, birthYear, ... (people)
-    title.basics.tsv.gz      tconst, titleType, primaryTitle, startYear, ... (titles)
-    title.principals.tsv.gz  tconst, nconst, category, ... (who appeared in what)
-    title.ratings.tsv.gz     tconst, averageRating, numVotes (used to keep
-                             only well-known movies in the smaller sizes)
-
-IMDb writes missing values as "\\N".
-
-Outputs (written to <out-dir>/<size>/, tab-separated, one header row each):
-    actors.tsv  idx  nconst  name   birthYear
-    movies.tsv  idx  tconst  title  year
-    edges.tsv   actorIdx  movieIdx
-
-Actor indices and movie indices are two separate contiguous ranges starting
-at 0, matching ActorIndex and MovieIndex in src/Graph.h. Each edges.tsv row
-says that actor actorIdx appeared in movie movieIdx.
-
-Usage:
-    python preprocess/preprocess.py --size small
-    python preprocess/preprocess.py --size full --raw-dir data/raw --out-dir data
-"""
+"""Make actor/movie TSV files from IMDb dumps."""
 
 import argparse
+import csv
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from time import perf_counter
+import pandas as pd
 
-# TODO(Raami): decide what each size keeps (for example a minimum numVotes
-# per movie) and document it in the README.
-SIZES = ("small", "medium", "full")
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--size", choices=SIZES, default="small",
-                        help="how much of IMDb to keep (default: small)")
-    parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"),
-                        help="folder holding the IMDb .tsv.gz files (default: data/raw)")
-    parser.add_argument("--out-dir", type=Path, default=Path("data"),
-                        help="output goes to <out-dir>/<size>/ (default: data)")
-    return parser.parse_args()
+minv = {"small":100000, "medium": 10000, "full":None}
+emp = ("", r"\N")
+outs = ("actors.tsv", "movies.tsv", "edges.tsv")
 
 
-def main() -> None:
-    args = parse_args()
-    out_dir = args.out_dir / args.size
+def cleanText(v):
+    return v.replace("\t", " ").replace("\r", " ").replace("\n", " ")
 
-    # TODO(Raami): with pandas:
-    #   1. read the four .tsv.gz files from args.raw_dir (sep="\t", na_values="\\N")
-    #   2. keep movies (titleType == "movie"), filtered by args.size
-    #   3. keep actor/actress credits on those movies from title.principals
-    #   4. assign contiguous actor and movie indices
-    #   5. write actors.tsv, movies.tsv and edges.tsv to out_dir
-    raise NotImplementedError(f"preprocessing not implemented yet (would write to {out_dir})")
 
+def ratedMovies(raw, s, sz):
+    cut = minv[s]
+    if cut is None :
+        return None
+    def pick(r):
+        votes =pd.to_numeric(r["numVotes"], errors="coerce")
+        r = r[votes >=cut]
+        return r
+    curr = readData(raw / "title.ratings.tsv.gz", ["tconst", "numVotes"], sz, pick)
+    sn =set()
+    for i in curr["tconst"]:
+        sn.add(i)
+    return sn
+
+
+def cleanYear(v):
+    if v in emp:
+        return r"\N"
+    else:
+        return str(int(v))
+
+
+def main():
+    a = getArgs()
+    t0 = perf_counter()
+    try:
+        out, (n,m, col), drp =preprocess(a)
+    except (OSError, ValueError, pd.errors.ParserError) as error:
+        raise SystemExit(f"Preprocessing failed: {error}") from None
+    print(f"Wrote {n} actors, {m} movies, and {col} unique credits to {out}")
+    if drp:
+        print(f"Dropped {drp} credits with missing actor metadata")
+    print(f"Finished in {perf_counter() - t0:.2f} seconds")
+
+
+def getArgs():
+    ps = argparse.ArgumentParser(description=__doc__)
+    ps.add_argument("--size", choices=minv, default="small")
+    ps.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
+    ps.add_argument("--out-dir", type=Path, default=Path("data"))
+    ps.add_argument("--chunksize", type=int, default=100000)
+    a = ps.parse_args()
+    if a.chunksize <1:
+        ps.error("--chunksize must be positive")
+    return a
+
+
+def preprocess(a):
+    nd = ["name.basics.tsv.gz", "title.basics.tsv.gz", "title.principals.tsv.gz"]
+    if minv[a.size] is not None:
+        nd.append("title.ratings.tsv.gz")
+    ms =[]
+    for i in nd:
+        if not (a.raw_dir / i).is_file():
+            ms.append(str(a.raw_dir / i))
+    if ms :
+        raise FileNotFoundError("Missing raw files: " + ", ".join(ms))
+
+    kp= ratedMovies(a.raw_dir,a.size, a.chunksize)
+    cs = ["tconst", "titleType", "primaryTitle", "startYear"]
+    def getMov(r):
+        r = r[r["titleType"] == "movie"]
+        r =r[~r["tconst"].isin(emp)]
+        r = r[~r["primaryTitle"].isin(emp)]
+        if kp is not None:
+            r = r[r["tconst"].isin(kp)]
+        return r
+    mov = readData(a.raw_dir / "title.basics.tsv.gz", cs, a.chunksize, getMov)
+    mov = mov.drop_duplicates("tconst")
+    mov =mov.rename(columns={"primaryTitle":"title", "startYear":"year"})
+    mov["year"] = mov["year"].map(cleanYear)
+    mov["title"] = mov["title"].map(cleanText)
+    sn =set(mov["tconst"])
+
+    cs = ["nconst", "tconst", "category"]
+    def getEdg(r):
+        r = r[r["category"].isin(("actor", "actress"))]
+        r =r[r["tconst"].isin(sn)]
+        r = r[~r["nconst"].isin(emp)]
+        return r
+    edg = readData(a.raw_dir / "title.principals.tsv.gz", cs, a.chunksize, getEdg)
+    edg = edg[["nconst", "tconst"]]
+    edg =edg.drop_duplicates(ignore_index=True)
+    b4 = len(edg)
+    sn = set(edg["nconst"])
+
+    cs =["nconst", "primaryName", "birthYear"]
+    def getAct(r):
+        r = r[r["nconst"].isin(sn)]
+        r =r[~r["primaryName"].isin(emp)]
+        return r
+    act = readData(a.raw_dir / "name.basics.tsv.gz", cs, a.chunksize, getAct)
+    act = act.drop_duplicates("nconst")
+    act =act.rename(columns={"primaryName":"name"})
+    act["birthYear"] = act["birthYear"].map(cleanYear)
+    act["name"] = act["name"].map(cleanText)
+    edg = edg[edg["nconst"].isin(act["nconst"])]
+    edg = edg.copy()
+    drp = b4-len(edg)
+    act = act[act["nconst"].isin(edg["nconst"])]
+    act = act.sort_values("nconst")
+    act =act.reset_index(drop=True)
+    mov = mov[mov["tconst"].isin(edg["tconst"])]
+    mov = mov.sort_values("tconst")
+    mov =mov.reset_index(drop=True)
+
+    # indexes start at 0
+    amap = {}
+    i = 0
+    for v in act["nconst"]:
+        amap[v] = i
+        i+=1
+    mmap ={}
+    i = 0
+    for v in mov["tconst"]:
+        mmap[v] = i
+        i+=1
+    act.insert(0, "idx", act["nconst"].map(amap))
+    mov.insert(0, "idx", mov["tconst"].map(mmap))
+    edg["actorIdx"] = edg["nconst"].map(amap)
+    edg["movieIdx"] = edg["tconst"].map(mmap)
+    edg = edg[["actorIdx", "movieIdx"]]
+    edg =edg.sort_values(["actorIdx", "movieIdx"])
+    act = act[["idx", "nconst", "name", "birthYear"]]
+    mov = mov[["idx", "tconst", "title", "year"]]
+
+    a.out_dir.mkdir(parents=True, exist_ok=True)
+    out = a.out_dir / a.size
+    with TemporaryDirectory(prefix=".preprocess-", dir=a.out_dir) as fd:
+        tmp= Path(fd)
+        writeFiles(tmp, [act,mov, edg])
+        out.mkdir(parents=True, exist_ok=True)
+        for i in outs:
+            (tmp / i).replace(out / i)
+    return out, (len(act),len(mov), len(edg)), drp
+
+
+def writeFiles(fd, sol):
+    for i in range(len(outs)):
+        curr = sol[i]
+        with (fd / outs[i]).open("w", encoding="utf-8", newline="") as f:
+            f.write("\t".join(curr.columns) + "\n")
+            for r in curr.itertuples(index=False, name=None):
+                vs =[]
+                for col in r:
+                    vs.append(str(col))
+                f.write("\t".join(vs) + "\n")
+
+
+def readData(p, cs, sz, fn):
+    sol =[]
+    with pd.read_csv(p, sep="\t", usecols=cs, dtype=str, keep_default_na=False,
+                     quoting=csv.QUOTE_NONE, encoding="utf-8", chunksize=sz) as rs:
+        for curr in rs:
+            curr =fn(curr)
+            curr =curr[cs]
+            if not curr.empty:
+                sol.append(curr)
+    if sol:
+        return pd.concat(sol, ignore_index=True)
+    return pd.DataFrame(columns=cs)
 
 if __name__ == "__main__":
     main()
