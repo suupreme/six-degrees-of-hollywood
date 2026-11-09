@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Everything except main.cpp, shared by the program and the tests.
+# Core library
 add_library(six_degrees_core STATIC
     src/Graph.cpp
     src/bfs.cpp
@@ -29,9 +29,12 @@ endif()
 add_executable(six_degrees src/main.cpp)
 target_link_libraries(six_degrees PRIVATE six_degrees_core)
 
+add_executable(benchmark_runner src/benchmark_main.cpp)
+target_link_libraries(benchmark_runner PRIVATE six_degrees_core)
+
+# Tests
 add_executable(tests tests/test_main.cpp)
 target_link_libraries(tests PRIVATE six_degrees_core)
-# Lets the tests find the sample data no matter where they are run from.
 target_compile_definitions(tests PRIVATE
     SAMPLE_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/sample")
 
