@@ -9,8 +9,7 @@ out/
 *.exe
 *.pdb
 
-# Data: raw IMDb dumps and generated datasets stay local.
-# Only the hand-written sample is tracked.
+# Data
 *.tsv.gz
 data/*
 !data/sample/
