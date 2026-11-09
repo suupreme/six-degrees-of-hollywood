@@ -28,6 +28,11 @@ endif()
 
 add_executable(six_degrees src/main.cpp)
 target_link_libraries(six_degrees PRIVATE six_degrees_core)
+target_compile_definitions(six_degrees PRIVATE
+    SIX_DEGREES_WEB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/viz")
+if(WIN32)
+    target_link_libraries(six_degrees PRIVATE ws2_32)
+endif()
 
 add_executable(benchmark_runner src/benchmark_main.cpp)
 target_link_libraries(benchmark_runner PRIVATE six_degrees_core)

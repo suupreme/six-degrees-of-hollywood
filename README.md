@@ -54,11 +54,13 @@ gitignored. Only the hand-written sample in `data/sample/` is committed.
 ## Preprocessing
 
 ```bash
+pip install -r preprocess/requirements.txt
 python preprocess/preprocess.py --size small
+python preprocess/preprocess.py --size medium
+python preprocess/preprocess.py --size full
 ```
 
-`--size` is `small`, `medium` or `full`, and output goes to `data/<size>/`.
-Each run writes three tab-separated files, each with a header row:
+Output goes to `data/<size>/`. Each run writes three tab-separated files, each with a header row:
 
 | File | Columns |
 |---|---|
@@ -66,25 +68,61 @@ Each run writes three tab-separated files, each with a header row:
 | `movies.tsv` | `idx  tconst  title  year` |
 | `edges.tsv` | `actorIdx  movieIdx` |
 
-TODO(Raami): what each size keeps, and how long each one takes to generate.
+Every size keeps only feature films (`titleType == movie`) and people credited
+as `actor` or `actress`. The sizes differ in which movies they keep:
+
+| Size | Movies kept | Actors | Movies |
+|---|---|---|---|
+| `small` | at least 100,000 IMDb votes | 13,619 | 2,761 |
+| `medium` | at least 10,000 IMDb votes | 54,830 | 12,472 |
+| `full` | every movie | 1,369,669 | 547,163 |
+
+Each smaller size is a subset of the larger ones. `title.principals` lists only
+the top-billed cast of each title (about 10 people), so minor roles are missing
+and some real-world paths are longer here than they would be with full casts.
+`full` takes much longer to preprocess than the other sizes.
+
+TODO(Raami): how long each size takes to generate.
 
 ## Building
 
 ```bash
-cmake -S . -B build
-cmake --build build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ```
 
-This builds two executables: `six_degrees` (the program) and `tests`.
+This builds `six_degrees` (the program), `benchmark_runner` and `tests`.
+With Visual Studio the executables are in `build/Release/`.
 
 ## Running
 
+Web UI: start the server, then open <http://localhost:8080>:
+
 ```bash
-build/six_degrees data/sample
+build/six_degrees data/small --serve
 ```
 
-TODO(Josh): document the final command-line options (interactive search,
-`--benchmark`, `--export`).
+Type two actors (suggestions appear as you type) and click **Find Connection**.
+The page shows the chain of movies, each step, and how BFS and bidirectional BFS
+compare on that search. If several actors share a name, it asks which one you meant.
+
+Command line:
+
+```bash
+build/six_degrees data/small
+build/six_degrees data/medium --from "Kevin Bacon" --to "Meryl Streep"
+```
+
+| Option | Meaning |
+|---|---|
+| `--from NAME --to NAME` | run one search instead of asking |
+| `--algo bfs\|bidir\|both` | which search to run (default `both`) |
+| `--export FILE` | save each search as JSON (see `viz/path.json`) |
+| `--benchmark PAIRS OUT.csv` | benchmark one dataset; `PAIRS` is a number of random pairs or a file of nm id pairs |
+| `--serve [PORT]` | run the web UI (default port 8080) |
+| `--web DIR` | folder with the web UI files (default: the repo's `viz/`) |
+
+Names can also be given as IMDb ids (`nm0000102`).
 
 Tests (they use `data/sample/`):
 
@@ -92,12 +130,30 @@ Tests (they use `data/sample/`):
 ctest --test-dir build --output-on-failure
 ```
 
-Visualization: export a path to `viz/path.json`, then serve the folder and
-open <http://localhost:8000>:
+## Benchmark
 
 ```bash
-python -m http.server --directory viz 8000
+build/benchmark_runner results.csv 1000 data/small data/medium data/full
 ```
+
+This picks 1,000 random pairs of actors from the first dataset (list the smallest
+first), runs both algorithms on the same pairs in every dataset, and writes one row
+per run to `results.csv`:
+`dataset,algorithm,src,dst,degrees,nodesVisited,ms`. `degrees` is -1 when the two
+actors are not connected. The pairs are saved to `results.csv.pairs.tsv`, so a run
+can be repeated with `build/benchmark_runner results.csv results.csv.pairs.tsv ...`.
+
+Results from one run (1,000 pairs, averages per search):
+
+| Size | BFS time (ms) | Bidirectional time (ms) | BFS nodes visited | Bidirectional nodes visited | Pairs with no path |
+|---|---|---|---|---|---|
+| `small` | 0.122 | 0.013 | 7,838 | 665 | 44 |
+| `medium` | 0.348 | 0.049 | 20,300 | 1,715 | 7 |
+| `full` | 4.749 | 1.818 | 105,702 | 6,447 | 0 |
+
+Bidirectional BFS visited 12 to 16 times fewer nodes and ran 2.6 to 9 times faster
+at every size, and both algorithms found the same number of degrees for every pair.
+Pairs that are not connected in `small` become connected as more movies are added.
 
 ## Project structure
 
@@ -111,8 +167,9 @@ src/
   lookup.h/.cpp        actor name -> list of actor indices (names can repeat)
   benchmark.h/.cpp     runs both searches on the same pairs, writes a results CSV
   main.cpp             command-line program
-ui/                    user interface (TODO)
-viz/                   path.json example and a vis-network viewer
+  benchmark_main.cpp   benchmark_runner: same pairs across several datasets
+ui/                    console UI, JSON export and the local web server for --serve
+viz/                   web UI (index.html, style.css, app.js) and a path.json example
 data/sample/           small hand-written dataset with known answers
 tests/                 test_main.cpp, plain checks with no framework
 ```

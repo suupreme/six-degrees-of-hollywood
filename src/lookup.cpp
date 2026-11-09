@@ -48,6 +48,10 @@ std::vector<ActorIndex> ActorLookup::findActor(const std::string& name) const {
     return it->second;
 }
 
+MovieIndex ActorLookup::knownMovie(ActorIndex actor) const {
+    return actor < knownMovie_.size() ? knownMovie_[actor] : dataset_.movies.size();
+}
+
 std::string ActorLookup::describe(ActorIndex actor) const {
     if (actor >= dataset_.actors.size())
         return "unknown actor";
