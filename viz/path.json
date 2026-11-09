@@ -1,23 +1,32 @@
 {
-  "source": "nm9000000",
-  "target": "nm9000006",
+  "sourceName": "Ava Brooks",
+  "targetName": "Fay Garner",
   "algorithm": "bfs",
   "degrees": 3,
+  "actorsVisited": 9,
+  "moviesVisited": 6,
+  "ms": 0.045844,
   "nodes": [
-    { "id": "nm9000000", "label": "Ava Brooks", "type": "actor" },
-    { "id": "tt9100005", "label": "Second Chorus (2020)", "type": "movie" },
-    { "id": "nm9000007", "label": "Gus Hill", "type": "actor" },
-    { "id": "tt9100003", "label": "Paper Lanterns (2012)", "type": "movie" },
-    { "id": "nm9000005", "label": "Eli Foster", "type": "actor" },
-    { "id": "tt9100004", "label": "Northbound (2016)", "type": "movie" },
-    { "id": "nm9000006", "label": "Fay Garner", "type": "actor" }
+    {"id": "nm9000000", "label": "Ava Brooks", "type": "actor", "onPath": true},
+    {"id": "tt9100005", "label": "Second Chorus (2020)", "type": "movie", "onPath": true},
+    {"id": "nm9000007", "label": "Gus Hill", "type": "actor", "onPath": true},
+    {"id": "tt9100003", "label": "Paper Lanterns (2012)", "type": "movie", "onPath": true},
+    {"id": "nm9000005", "label": "Eli Foster", "type": "actor", "onPath": true},
+    {"id": "tt9100004", "label": "Northbound (2016)", "type": "movie", "onPath": true},
+    {"id": "nm9000006", "label": "Fay Garner", "type": "actor", "onPath": true},
+    {"id": "tt9100000", "label": "Midnight Harbor (1998)", "type": "movie", "onPath": false},
+    {"id": "nm9000008", "label": "Alex Morgan", "type": "actor", "onPath": false},
+    {"id": "nm9000004", "label": "Dana Ellis", "type": "actor", "onPath": false}
   ],
   "edges": [
-    { "from": "nm9000000", "to": "tt9100005" },
-    { "from": "tt9100005", "to": "nm9000007" },
-    { "from": "nm9000007", "to": "tt9100003" },
-    { "from": "tt9100003", "to": "nm9000005" },
-    { "from": "nm9000005", "to": "tt9100004" },
-    { "from": "tt9100004", "to": "nm9000006" }
+    {"from": "nm9000000", "to": "tt9100005", "onPath": true},
+    {"from": "tt9100005", "to": "nm9000007", "onPath": true},
+    {"from": "nm9000007", "to": "tt9100003", "onPath": true},
+    {"from": "tt9100003", "to": "nm9000005", "onPath": true},
+    {"from": "nm9000005", "to": "tt9100004", "onPath": true},
+    {"from": "tt9100004", "to": "nm9000006", "onPath": true},
+    {"from": "nm9000000", "to": "tt9100000", "onPath": false},
+    {"from": "tt9100005", "to": "nm9000008", "onPath": false},
+    {"from": "tt9100003", "to": "nm9000004", "onPath": false}
   ]
 }
