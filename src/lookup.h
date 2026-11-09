@@ -13,6 +13,7 @@ public:
 
     std::vector<ActorIndex> findActor(const std::string& name) const;
     std::string describe(ActorIndex actor) const;
+    MovieIndex knownMovie(ActorIndex actor) const;
 
 private:
     const Dataset& dataset_;

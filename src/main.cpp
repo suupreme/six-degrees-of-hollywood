@@ -5,6 +5,7 @@
 //   --algo bfs|bidir|both       which search to run (default both)
 //   --export FILE               save each search as JSON for viz/index.html
 //   --benchmark PAIRS OUT.csv   PAIRS is a number of random pairs, or a file with two nm ids per line
+//   --serve [PORT]              run the web UI at http://localhost:PORT (default 8080)
 
 #include <cctype>
 #include <fstream>
@@ -29,6 +30,11 @@
 #include "lookup.h"
 #include "../ui/console.h"
 #include "../ui/path_export.h"
+#include "../ui/server.h"
+
+#ifndef SIX_DEGREES_WEB_DIR
+#define SIX_DEGREES_WEB_DIR "viz"
+#endif
 
 struct Options {
     std::string dataDir = "data/sample";
@@ -38,6 +44,8 @@ struct Options {
     std::string exportFile;
     std::string benchmarkPairs;
     std::string benchmarkOut;
+    int servePort = 0;
+    std::string webDir = SIX_DEGREES_WEB_DIR;
 };
 
 void printUsage() {
@@ -46,6 +54,8 @@ void printUsage() {
     std::cout << "  --algo bfs|bidir|both       which search to run (default both)\n";
     std::cout << "  --export FILE               save each search as JSON for viz/index.html\n";
     std::cout << "  --benchmark PAIRS OUT.csv   PAIRS is a number of random pairs, or a file of nm id pairs\n";
+    std::cout << "  --serve [PORT]              run the web UI at http://localhost:PORT (default 8080)\n";
+    std::cout << "  --web DIR                   folder with the web UI files (default: the repo's viz/)\n";
 }
 
 // Returns false if the arguments are wrong.
@@ -67,6 +77,13 @@ bool parseArgs(int argc, char* argv[], Options& options) {
         } else if (arg == "--benchmark" && i + 2 < argc) {
             options.benchmarkPairs = argv[++i];
             options.benchmarkOut = argv[++i];
+        } else if (arg == "--serve") {
+            options.servePort = 8080;
+            if (hasValue && std::isdigit(static_cast<unsigned char>(argv[i + 1][0]))) {
+                options.servePort = std::atoi(argv[++i]);
+            }
+        } else if (arg == "--web" && hasValue) {
+            options.webDir = argv[++i];
         } else if (!arg.empty() && arg[0] != '-') {
             options.dataDir = arg;
         } else {
@@ -204,6 +221,18 @@ std::vector<ActorPair> pairsFromFile(const std::string& file, const Dataset& dat
     return pairs;
 }
 
+// Names the dataset after its folder, e.g. "data/small" -> "small".
+std::string datasetName(std::string name) {
+    while (name.size() > 1 && (name.back() == '/' || name.back() == '\\')) {
+        name.pop_back();
+    }
+    std::size_t slash = name.find_last_of("/\\");
+    if (slash != std::string::npos) {
+        name = name.substr(slash + 1);
+    }
+    return name;
+}
+
 int runBenchmarkMode(const Dataset& dataset, const Graph& graph, const Options& options) {
     bool isNumber = true;
     for (char c : options.benchmarkPairs) {
@@ -223,15 +252,7 @@ int runBenchmarkMode(const Dataset& dataset, const Graph& graph, const Options& 
         return 1;
     }
 
-    // Name the dataset after its folder, e.g. "data/small" -> "small".
-    std::string name = options.dataDir;
-    while (name.size() > 1 && (name.back() == '/' || name.back() == '\\')) {
-        name.pop_back();
-    }
-    std::size_t slash = name.find_last_of("/\\");
-    if (slash != std::string::npos) {
-        name = name.substr(slash + 1);
-    }
+    std::string name = datasetName(options.dataDir);
 
     std::cout << "Benchmarking " << pairs.size() << " pairs on " << name << "...\n";
     std::vector<BenchmarkRow> rows = runBenchmark(graph, name, pairs);
@@ -275,6 +296,11 @@ int main(int argc, char* argv[]) {
 
     if (!options.benchmarkPairs.empty()) {
         return runBenchmarkMode(dataset, graph, options);
+    }
+
+    if (options.servePort > 0) {
+        WebServer server(dataset, graph, lookup, options.webDir, datasetName(options.dataDir));
+        return server.run(options.servePort);
     }
 
     if (options.from.empty()) {
